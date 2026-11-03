@@ -1,7 +1,7 @@
 /**
  * ZooSMate - Sistem Navigasi Cerdas, GPS Realtime, & Petunjuk Arah
  * Algoritma A* & Dijkstra pada Jaringan Jalan Setapak Asli (OpenStreetMap)
- * Dilengkapi Realtime GPS Tracker, Proximity Alert Geofencing, & Custom Coordinate Manager
+ * Dilengkapi Realtime GPS Tracker (Izin Lokasi Otomatis), Proximity Alert Geofencing, & Custom Coordinate Manager
  */
 
 // -------------------------------------------------------------
@@ -14,7 +14,10 @@ const OSM_NODES = NETWORK_DATA.nodes;
 const OSM_WAYS = NETWORK_DATA.ways;
 const PRESET_POIS = NETWORK_DATA.pois || [];
 
-// Koleksi seluruh POI (Bawaan + Kustom dari Pengguna)
+// Koordinat Pusat Kawasan Hutan UNESA Kampus Lidah Wetan
+const UNESA_CENTER = { lat: -7.300500, lon: 112.671000 };
+
+// Koleksi seluruh POI (Bawaan Resmi UNESA + Kustom dari Pengguna)
 let ALL_POIS = [...PRESET_POIS];
 const POI_MAP = {};
 
@@ -61,7 +64,7 @@ function haversineDistance(p1, p2) {
   return Math.round(R * c);
 }
 
-function findNearestPathNode(lat, lon, maxDistance = 400) {
+function findNearestPathNode(lat, lon, maxDistance = 500) {
   let nearestId = null;
   let minDist = Infinity;
 
@@ -373,22 +376,17 @@ class ZooSMateNavigationApp {
     this.walkablePathsLayer = null;
     this.poiMarkersLayer = null;
     this.activeRouteLayer = null;
-    this.walkerMarker = null;
 
-    // Realtime GPS Tracking State
+    // Realtime GPS Tracking State (Izin Otomatis saat Web Dibuka)
     this.isGpsActive = false;
     this.gpsWatchId = null;
     this.currentUserCoords = null; // { lat, lon, accuracy }
     this.userGpsMarker = null;
     this.userAccuracyCircle = null;
-
-    // Mock GPS Simulation (untuk pengujian di laptop/desktop)
-    this.isMockGps = false;
-    this.mockGpsInterval = null;
-    this.mockStepIdx = 0;
+    this.hasInitialGpsFix = false;
 
     // Proximity Detection State
-    this.proximityThresholdMeters = 30; // Radius deteksi tempat terdekat
+    this.proximityThresholdMeters = 30;
     this.activeProximityPoiId = null;
     this.proximitySoundEnabled = true;
 
@@ -398,8 +396,6 @@ class ZooSMateNavigationApp {
 
     this.showFootpaths = true;
     this.showLabels = true;
-    this.isSimulating = false;
-    this.simulationInterval = null;
     this.isSpeaking = false;
   }
 
@@ -413,10 +409,13 @@ class ZooSMateNavigationApp {
     this.renderCustomPoiList();
     this.bindEvents();
     this.calculateAndRenderRoute();
+
+    // 🚀 LANGSUNG MINTA IZIN AKSES LOKASI REALTIME SAAT WEB DIBUKA
+    this.startGpsTracking();
   }
 
   // -----------------------------------------------------------
-  // Manajemen Custom POI (Tambah & Ganti Sendiri)
+  // Manajemen Custom POI (Tandai & Bisa Diganti Sendiri)
   // -----------------------------------------------------------
   loadCustomPoisFromStorage() {
     try {
@@ -447,14 +446,13 @@ class ZooSMateNavigationApp {
   }
 
   // -----------------------------------------------------------
-  // Inisialisasi Peta Leaflet
+  // Inisialisasi Peta Leaflet (Fokus di Kawasan Hutan UNESA)
   // -----------------------------------------------------------
   initMap() {
-    const startNode = OSM_NODES[this.startNodeId] || { lat: -7.299792, lon: 112.671036 };
-
+    // Pusat peta default selalu di Hutan UNESA agar seluruh POINT tetap terlihat jelas
     this.map = L.map('map', {
       zoomControl: true
-    }).setView([startNode.lat, startNode.lon], 17);
+    }).setView([UNESA_CENTER.lat, UNESA_CENTER.lon], 17);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -470,6 +468,10 @@ class ZooSMateNavigationApp {
     }, 250);
   }
 
+  centerToUnesa() {
+    this.map.setView([UNESA_CENTER.lat, UNESA_CENTER.lon], 17, { animate: true });
+  }
+
   populateDropdowns() {
     const startSelect = document.getElementById('select-start');
     const endSelect = document.getElementById('select-end');
@@ -477,7 +479,7 @@ class ZooSMateNavigationApp {
     startSelect.innerHTML = '';
     endSelect.innerHTML = '';
 
-    // Group 1: Tempat Wisata & Landmark Hutan UNESA
+    // Group 1: Tempat Resmi Hutan UNESA
     const grpPresetStart = document.createElement('optgroup');
     grpPresetStart.label = "🌲 Tempat Resmi Hutan UNESA";
     const grpPresetEnd = document.createElement('optgroup');
@@ -547,9 +549,6 @@ class ZooSMateNavigationApp {
     });
   }
 
-  // -----------------------------------------------------------
-  // Render POI Markers (Termasuk Draggable Custom Marker)
-  // -----------------------------------------------------------
   renderPoiMarkers() {
     this.poiMarkersLayer.clearLayers();
 
@@ -575,13 +574,11 @@ class ZooSMateNavigationApp {
         popupAnchor: [0, -14]
       });
 
-      // Marker kustom dapat di-drag langsung di peta untuk mengubah koordinat!
       const marker = L.marker([poi.lat || node.lat, poi.lon || node.lon], {
         icon: customIcon,
         draggable: isCustom
       });
 
-      // Konten Popup
       let customBadge = isCustom ? `<span style="background:#f59e0b;color:#000;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:bold;">TITIK KUSTOM</span>` : '';
       let actionsHtml = `
         <div class="popup-node-actions">
@@ -615,7 +612,6 @@ class ZooSMateNavigationApp {
         });
       }
 
-      // Event saat marker kustom digeser (Drag End)
       if (isCustom) {
         marker.on('dragend', (e) => {
           const newPos = e.target.getLatLng();
@@ -631,10 +627,9 @@ class ZooSMateNavigationApp {
     const poi = this.customPois.find(p => p.id === poiId);
     if (!poi) return;
 
-    // Snap ke node jalan setapak terdekat
-    const snap = findNearestPathNode(newLat, newLng, 300);
+    const snap = findNearestPathNode(newLat, newLng, 400);
     if (!snap) {
-      alert("Lokasi baru terlalu jauh dari jalan setapak yang ada.");
+      alert("Lokasi baru terlalu jauh dari jaringan jalan setapak Hutan UNESA.");
       this.renderPoiMarkers();
       return;
     }
@@ -693,9 +688,6 @@ class ZooSMateNavigationApp {
     }
   }
 
-  // -----------------------------------------------------------
-  // Modal Form Tambah / Edit Titik Koordinat
-  // -----------------------------------------------------------
   openAddPoiModal(presetCoords = null) {
     document.getElementById('modal-form-title').textContent = "Tambah Titik Koordinat Baru";
     document.getElementById('input-poi-id').value = "";
@@ -710,8 +702,8 @@ class ZooSMateNavigationApp {
       document.getElementById('input-poi-lat').value = this.currentUserCoords.lat.toFixed(6);
       document.getElementById('input-poi-lng').value = this.currentUserCoords.lon.toFixed(6);
     } else {
-      document.getElementById('input-poi-lat').value = "-7.300500";
-      document.getElementById('input-poi-lng').value = "112.671000";
+      document.getElementById('input-poi-lat').value = UNESA_CENTER.lat.toFixed(6);
+      document.getElementById('input-poi-lng').value = UNESA_CENTER.lon.toFixed(6);
     }
 
     this.selectEmoji("📍");
@@ -763,15 +755,13 @@ class ZooSMateNavigationApp {
       return;
     }
 
-    // Snap ke node jalan setapak terdekat
-    const snap = findNearestPathNode(lat, lon, 400);
+    const snap = findNearestPathNode(lat, lon, 500);
     if (!snap) {
-      alert("Titik koordinat berada terlalu jauh dari jaringan jalan setapak Hutan UNESA. Silakan masukkan koordinat di sekitar area kampus/hutan.");
+      alert("Titik koordinat berada terlalu jauh dari jaringan jalan setapak Hutan UNESA. Silakan masukkan koordinat di sekitar kawasan Hutan UNESA.");
       return;
     }
 
     if (id) {
-      // Mode Edit
       const existing = this.customPois.find(p => p.id === id);
       if (existing) {
         existing.name = name;
@@ -783,7 +773,6 @@ class ZooSMateNavigationApp {
         existing.nodeId = snap.id;
       }
     } else {
-      // Mode Tambah Baru
       const newPoi = {
         id: "CUSTOM_" + Date.now(),
         name,
@@ -805,8 +794,6 @@ class ZooSMateNavigationApp {
     this.renderCustomPoiList();
 
     document.getElementById('modal-poi-form').classList.remove('show');
-
-    // Pan ke titik yang baru disimpan
     this.map.setView([lat, lon], 18, { animate: true });
   }
 
@@ -820,7 +807,6 @@ class ZooSMateNavigationApp {
     this.renderPoiMarkers();
     this.renderCustomPoiList();
 
-    // Jika yang dihapus sedang jadi start/end, ganti ke default
     if (this.selectedStartPoi === poiId) {
       this.selectedStartPoi = "POI_START";
       this.startNodeId = PRESET_POIS[0].nodeId;
@@ -835,7 +821,7 @@ class ZooSMateNavigationApp {
   }
 
   // -----------------------------------------------------------
-  // 1. FITUR REALTIME CHECK KOORDINAT USER (LIVE GPS TRACKING)
+  // 1. FITUR REALTIME CHECK KOORDINAT USER (LIVE GPS ASLI)
   // -----------------------------------------------------------
   toggleGpsTracking() {
     if (this.isGpsActive) {
@@ -847,21 +833,22 @@ class ZooSMateNavigationApp {
 
   startGpsTracking() {
     if (!('geolocation' in navigator)) {
-      alert("Perangkat atau browser Anda tidak mendukung Geolocation API.");
+      document.getElementById('gps-status-sub').textContent = "Browser tidak mendukung Geolocation API";
       return;
     }
 
     this.isGpsActive = true;
     document.getElementById('btn-toggle-gps').classList.add('active');
     document.getElementById('gps-pulse-dot').classList.add('active');
-    document.getElementById('gps-status-sub').textContent = "GPS Realtime Aktif (Mencari koordinat...)";
+    document.getElementById('gps-status-sub').textContent = "Meminta izin GPS ke browser & mencari sinyal...";
 
     const options = {
       enableHighAccuracy: true,
-      timeout: 10000,
+      timeout: 15000,
       maximumAge: 0
     };
 
+    // Panggil navigator.geolocation.watchPosition untuk pelacakan terus menerus
     this.gpsWatchId = navigator.geolocation.watchPosition(
       (pos) => this.onGpsUpdate(pos),
       (err) => this.onGpsError(err),
@@ -874,16 +861,11 @@ class ZooSMateNavigationApp {
       navigator.geolocation.clearWatch(this.gpsWatchId);
       this.gpsWatchId = null;
     }
-    if (this.isMockGps) {
-      clearInterval(this.mockGpsInterval);
-      this.isMockGps = false;
-      document.getElementById('btn-gps-mock').textContent = "🧪 Simulasi GPS";
-    }
 
     this.isGpsActive = false;
     document.getElementById('btn-toggle-gps').classList.remove('active');
     document.getElementById('gps-pulse-dot').classList.remove('active');
-    document.getElementById('gps-status-sub').textContent = "GPS dinonaktifkan";
+    document.getElementById('gps-status-sub').textContent = "GPS dinonaktifkan (Klik 'GPS Live' untuk mengaktifkan)";
 
     if (this.userGpsMarker) {
       this.userGpsMarker.remove();
@@ -902,21 +884,50 @@ class ZooSMateNavigationApp {
 
     this.currentUserCoords = { lat, lon, accuracy: acc };
 
-    // Update UI Status Bar
-    document.getElementById('gps-coords-display').textContent = `Lat: ${lat.toFixed(6)}, Lng: ${lon.toFixed(6)}`;
-    document.getElementById('gps-status-sub').textContent = `Akurasi: ±${acc}m | Bergerak di Hutan UNESA`;
+    // Hitung jarak pengguna ke pusat Hutan UNESA
+    const distToUnesa = haversineDistance({ lat, lon }, UNESA_CENTER);
 
-    // Render Marker GPS Pengguna
+    // Update Status Bar di Kiri Bawah
+    document.getElementById('gps-coords-display').textContent = `Lat: ${lat.toFixed(6)}, Lng: ${lon.toFixed(6)}`;
+    
+    if (distToUnesa <= 1500) {
+      document.getElementById('gps-status-sub').textContent = `Akurasi: ±${acc}m | Anda berada di area Kampus/Hutan UNESA`;
+    } else {
+      const distKm = (distToUnesa / 1000).toFixed(1);
+      document.getElementById('gps-status-sub').textContent = `Akurasi: ±${acc}m | Jarak Anda ke Hutan UNESA: ${distKm} km`;
+    }
+
+    // Render Marker GPS Pengguna di lokasi riil
     this.renderUserGpsMarker(lat, lon, acc);
 
-    // 2. CEK PROXIMITY DETECTION (Tempat Terdekat)
+    // Cek Proximity Geofencing terhadap semua tempat
     this.checkProximityToPois(lat, lon);
     this.updateNearbyList(lat, lon);
+
+    // Saat pertama kali mendapatkan koordinat: jika berada di dalam kawasan UNESA, otomatis set sebagai awal
+    if (!this.hasInitialGpsFix) {
+      this.hasInitialGpsFix = true;
+      if (distToUnesa <= 1500) {
+        const snap = findNearestPathNode(lat, lon, 500);
+        if (snap) {
+          this.startNodeId = snap.id;
+          this.calculateAndRenderRoute();
+        }
+      }
+    }
   }
 
   onGpsError(err) {
     console.warn("GPS Error:", err.message);
-    document.getElementById('gps-status-sub').textContent = `GPS: ${err.message}. Gunakan tombol 'Simulasi GPS' untuk uji coba PC.`;
+    let msg = "Gagal mengambil lokasi GPS";
+    if (err.code === 1) {
+      msg = "Izin lokasi ditolak oleh pengguna. Silakan izinkan akses lokasi pada browser.";
+    } else if (err.code === 2) {
+      msg = "Posisi GPS tidak tersedia / sinyal lemah.";
+    } else if (err.code === 3) {
+      msg = "Waktu pencarian GPS habis (timeout).";
+    }
+    document.getElementById('gps-status-sub').textContent = msg;
   }
 
   renderUserGpsMarker(lat, lon, accuracy) {
@@ -929,14 +940,14 @@ class ZooSMateNavigationApp {
 
     if (!this.userGpsMarker) {
       this.userGpsMarker = L.marker([lat, lon], { icon: userIcon, zIndexOffset: 1000 }).addTo(this.map);
-      this.userGpsMarker.bindPopup("<b>📍 Posisi Anda Sekarang</b><br>Koordinat GPS Realtime.");
+      this.userGpsMarker.bindPopup("<b>📍 Posisi Anda Saat Ini</b><br>Koordinat GPS Realtime perangkat.");
     } else {
       this.userGpsMarker.setLatLng([lat, lon]);
     }
 
     if (!this.userAccuracyCircle) {
       this.userAccuracyCircle = L.circle([lat, lon], {
-        radius: Math.min(accuracy, 60),
+        radius: Math.min(accuracy, 80),
         color: '#3b82f6',
         fillColor: '#60a5fa',
         fillOpacity: 0.15,
@@ -944,7 +955,7 @@ class ZooSMateNavigationApp {
       }).addTo(this.map);
     } else {
       this.userAccuracyCircle.setLatLng([lat, lon]);
-      this.userAccuracyCircle.setRadius(Math.min(accuracy, 60));
+      this.userAccuracyCircle.setRadius(Math.min(accuracy, 80));
     }
   }
 
@@ -952,78 +963,31 @@ class ZooSMateNavigationApp {
     if (this.currentUserCoords) {
       this.map.setView([this.currentUserCoords.lat, this.currentUserCoords.lon], 18, { animate: true });
     } else {
-      alert("Posisi GPS belum terdeteksi. Silakan aktifkan GPS atau gunakan tombol 'Simulasi GPS'.");
+      alert("Sedang mencari lokasi GPS Anda. Pastikan izin lokasi browser telah diizinkan.");
+      this.startGpsTracking();
     }
   }
 
   setGpsAsStartPoint() {
     if (!this.currentUserCoords) {
-      alert("Belum ada koordinat GPS. Mengaktifkan GPS sekarang...");
+      alert("Lokasi GPS Anda belum terdeteksi. Silakan aktifkan 'GPS Live' dan izinkan browser mengakses lokasi.");
       this.startGpsTracking();
       return;
     }
 
-    const snap = findNearestPathNode(this.currentUserCoords.lat, this.currentUserCoords.lon, 400);
+    const snap = findNearestPathNode(this.currentUserCoords.lat, this.currentUserCoords.lon, 600);
     if (!snap) {
-      alert("Posisi GPS Anda terlalu jauh dari jaringan jalan setapak Hutan UNESA.");
+      alert("Lokasi Anda saat ini berada di luar kawasan jalan setapak Hutan UNESA. Untuk navigasi di dalam hutan, titik awal akan dimulai dari Gerbang Utama UNESA.");
+      this.startNodeId = PRESET_POIS[0].nodeId;
+      this.selectedStartPoi = "POI_START";
+      document.getElementById('select-start').value = "POI_START";
+      this.calculateAndRenderRoute();
       return;
     }
 
     this.startNodeId = snap.id;
     this.map.setView([this.currentUserCoords.lat, this.currentUserCoords.lon], 18, { animate: true });
     this.calculateAndRenderRoute();
-  }
-
-  // -----------------------------------------------------------
-  // Simulasi GPS Pengunjung (Mocking untuk Laptop/PC)
-  // -----------------------------------------------------------
-  toggleMockGps() {
-    if (this.isMockGps) {
-      clearInterval(this.mockGpsInterval);
-      this.isMockGps = false;
-      document.getElementById('btn-gps-mock').textContent = "🧪 Simulasi GPS";
-      document.getElementById('gps-status-sub').textContent = "Simulasi GPS dihentikan";
-      return;
-    }
-
-    this.isMockGps = true;
-    document.getElementById('btn-gps-mock').textContent = "⏹️ Stop Simulasi";
-    document.getElementById('gps-pulse-dot').classList.add('active');
-    document.getElementById('btn-toggle-gps').classList.add('active');
-
-    // Rute jalan kaki simulasi melewati titik-titik Hutan UNESA
-    const mockWalkCoords = [
-      { lat: -7.299792, lon: 112.671036 }, // Gerbang Utama
-      { lat: -7.299920, lon: 112.671066 },
-      { lat: -7.300060, lon: 112.671076 },
-      { lat: -7.300250, lon: 112.671070 }, // Dekat Pos Info
-      { lat: -7.300619, lon: 112.671043 },
-      { lat: -7.300818, lon: 112.671019 },
-      { lat: -7.301092, lon: 112.670978 }, // Pintu Hutan
-      { lat: -7.301233, lon: 112.671419 }, // Masuk Hutan
-      { lat: -7.301330, lon: 112.671880 }  // Pusat Observasi Flora
-    ];
-
-    this.mockStepIdx = 0;
-    this.onGpsUpdate({
-      coords: {
-        latitude: mockWalkCoords[0].lat,
-        longitude: mockWalkCoords[0].lon,
-        accuracy: 4
-      }
-    });
-
-    this.mockGpsInterval = setInterval(() => {
-      this.mockStepIdx = (this.mockStepIdx + 1) % mockWalkCoords.length;
-      const pt = mockWalkCoords[this.mockStepIdx];
-      this.onGpsUpdate({
-        coords: {
-          latitude: pt.lat,
-          longitude: pt.lon,
-          accuracy: 5
-        }
-      });
-    }, 2500);
   }
 
   // -----------------------------------------------------------
@@ -1046,7 +1010,6 @@ class ZooSMateNavigationApp {
       }
     });
 
-    // Jika jarak <= 30 meter: memicu Proximity Alert
     if (closestPoi && closestDist <= this.proximityThresholdMeters) {
       if (this.activeProximityPoiId !== closestPoi.id) {
         this.activeProximityPoiId = closestPoi.id;
@@ -1065,7 +1028,6 @@ class ZooSMateNavigationApp {
     document.getElementById('proximity-title').textContent = `${poi.name} (${distance}m dari Anda)`;
     document.getElementById('proximity-desc').textContent = poi.desc || "Anda sedang berada sangat dekat dengan lokasi ini.";
 
-    // Action button
     document.getElementById('btn-prox-set-start').onclick = () => {
       this.setStartFromNode(poi.nodeId, poi.id);
       toast.classList.remove('show');
@@ -1077,12 +1039,10 @@ class ZooSMateNavigationApp {
 
     toast.classList.add('show');
 
-    // Notifikasi suara cerdas (Text to Speech)
     if (this.proximitySoundEnabled) {
       this.speakText(`Perhatian. Anda sedang berada di dekat ${poi.name}.`);
     }
 
-    // Auto hide setelah 8 detik jika tidak disentuh
     clearTimeout(this.toastTimeout);
     this.toastTimeout = setTimeout(() => {
       toast.classList.remove('show');
@@ -1101,7 +1061,6 @@ class ZooSMateNavigationApp {
       return { ...p, currentDist: d };
     }).sort((a, b) => a.currentDist - b.currentDist);
 
-    // Tampilkan 3 tempat paling dekat
     sorted.slice(0, 3).forEach(p => {
       const li = document.createElement('li');
       li.className = 'nearby-item';
@@ -1123,17 +1082,18 @@ class ZooSMateNavigationApp {
   // Event Listeners & Binding
   // -----------------------------------------------------------
   bindEvents() {
-    // Tombol Live GPS Tracking
     document.getElementById('btn-toggle-gps').addEventListener('click', () => {
       this.toggleGpsTracking();
     });
 
-    // Tombol Pusatkan Peta ke GPS
     document.getElementById('btn-gps-recenter').addEventListener('click', () => {
       this.recenterToUser();
     });
 
-    // Tombol Jadikan GPS sebagai Titik Awal
+    document.getElementById('btn-center-unesa').addEventListener('click', () => {
+      this.centerToUnesa();
+    });
+
     document.getElementById('btn-gps-as-start').addEventListener('click', () => {
       this.setGpsAsStartPoint();
     });
@@ -1141,17 +1101,10 @@ class ZooSMateNavigationApp {
       this.setGpsAsStartPoint();
     });
 
-    // Tombol Simulasi GPS (Laptop / PC)
-    document.getElementById('btn-gps-mock').addEventListener('click', () => {
-      this.toggleMockGps();
-    });
-
-    // Tombol Tutup Proximity Toast
     document.getElementById('btn-close-proximity').addEventListener('click', () => {
       document.getElementById('proximity-toast').classList.remove('show');
     });
 
-    // Tombol Buka Modal Tambah Titik Baru
     document.getElementById('btn-open-add-poi').addEventListener('click', () => {
       this.openAddPoiModal();
     });
@@ -1159,7 +1112,6 @@ class ZooSMateNavigationApp {
       this.openAddPoiModal();
     });
 
-    // Form Modal Batal & Simpan
     document.getElementById('btn-close-form').addEventListener('click', () => {
       document.getElementById('modal-poi-form').classList.remove('show');
     });
@@ -1170,32 +1122,28 @@ class ZooSMateNavigationApp {
       this.savePoiFromForm();
     });
 
-    // Emoji Picker buttons
     document.querySelectorAll('.emoji-choice-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         this.selectEmoji(btn.dataset.emoji);
       });
     });
 
-    // Helper "Ambil dari GPS Sekarang" di Modal
     document.getElementById('btn-helper-use-gps').addEventListener('click', () => {
       if (this.currentUserCoords) {
         document.getElementById('input-poi-lat').value = this.currentUserCoords.lat.toFixed(6);
         document.getElementById('input-poi-lng').value = this.currentUserCoords.lon.toFixed(6);
       } else {
-        alert("GPS belum aktif. Mengaktifkan GPS sekarang...");
+        alert("GPS belum mendeteksi lokasi. Silakan tunggu beberapa detik...");
         this.startGpsTracking();
       }
     });
 
-    // Helper "Klik Titik di Peta" di Modal
     document.getElementById('btn-helper-pick-map').addEventListener('click', () => {
       this.isMapPickerActive = true;
       document.getElementById('modal-poi-form').classList.remove('show');
       alert("Silakan klik di mana saja pada peta untuk mengambil titik koordinat baru.");
     });
 
-    // Klik Peta Leaflet
     this.map.on('click', (e) => {
       if (this.isMapPickerActive) {
         this.isMapPickerActive = false;
@@ -1203,11 +1151,9 @@ class ZooSMateNavigationApp {
         return;
       }
 
-      // Normal map click: popup tanya jadikan titik awal/tujuan/buat titik baru
       const snap = findNearestPathNode(e.latlng.lat, e.latlng.lng, 300);
-      const snapNode = snap ? snap.node : { lat: e.latlng.lat, lon: e.latlng.lng };
 
-      const popup = L.popup()
+      L.popup()
         .setLatLng(e.latlng)
         .setContent(`
           <div class="popup-node-card">
@@ -1226,7 +1172,6 @@ class ZooSMateNavigationApp {
         .openOn(this.map);
     });
 
-    // Dropdown change
     document.getElementById('select-start').addEventListener('change', (e) => {
       this.selectedStartPoi = e.target.value;
       const p = POI_MAP[this.selectedStartPoi];
@@ -1241,7 +1186,6 @@ class ZooSMateNavigationApp {
       this.calculateAndRenderRoute();
     });
 
-    // Swap button
     document.getElementById('btn-swap').addEventListener('click', () => {
       const tempPoi = this.selectedStartPoi;
       this.selectedStartPoi = this.selectedEndPoi;
@@ -1256,7 +1200,6 @@ class ZooSMateNavigationApp {
       this.calculateAndRenderRoute();
     });
 
-    // Pilihan Tab Algoritma
     const tabAStar = document.getElementById('tab-algo-astar');
     const tabDijkstra = document.getElementById('tab-algo-dijkstra');
 
@@ -1274,12 +1217,10 @@ class ZooSMateNavigationApp {
       this.calculateAndRenderRoute();
     });
 
-    // Cari Rute Button
     document.getElementById('btn-find-route').addEventListener('click', () => {
       this.calculateAndRenderRoute();
     });
 
-    // Bandingkan Modal
     document.getElementById('btn-compare').addEventListener('click', () => {
       this.showComparisonModal();
     });
@@ -1288,7 +1229,6 @@ class ZooSMateNavigationApp {
       document.getElementById('modal-compare').classList.remove('show');
     });
 
-    // Toggle Panel
     const navPanel = document.getElementById('nav-panel');
     document.getElementById('btn-toggle-panel').addEventListener('click', () => {
       navPanel.classList.toggle('collapsed');
@@ -1297,7 +1237,6 @@ class ZooSMateNavigationApp {
       navPanel.classList.add('collapsed');
     });
 
-    // Layer Checkboxes
     document.getElementById('toggle-edges').addEventListener('change', (e) => {
       this.showFootpaths = e.target.checked;
       this.renderWalkableNetworkLayer();
@@ -1312,13 +1251,8 @@ class ZooSMateNavigationApp {
       this.proximitySoundEnabled = e.target.checked;
     });
 
-    // Audio & Simulasi
     document.getElementById('btn-audio-guide').addEventListener('click', () => {
       this.toggleSpeechGuide();
-    });
-
-    document.getElementById('btn-simulation').addEventListener('click', () => {
-      this.startSimulation();
     });
   }
 
@@ -1342,9 +1276,6 @@ class ZooSMateNavigationApp {
     this.calculateAndRenderRoute();
   }
 
-  // -----------------------------------------------------------
-  // Hitung Rute Terpendek & Render
-  // -----------------------------------------------------------
   calculateAndRenderRoute() {
     if (this.startNodeId === this.endNodeId) {
       alert("Titik awal dan tujuan berada pada lokasi yang sama.");
@@ -1365,10 +1296,6 @@ class ZooSMateNavigationApp {
 
   renderRouteGeometry(result) {
     this.activeRouteLayer.clearLayers();
-    if (this.walkerMarker) {
-      this.walkerMarker.remove();
-      this.walkerMarker = null;
-    }
 
     if (!result.path || result.path.length < 2) {
       alert("Rute tidak ditemukan antara kedua titik pada jaringan jalan setapak.");
@@ -1458,62 +1385,6 @@ class ZooSMateNavigationApp {
     });
   }
 
-  // -----------------------------------------------------------
-  // Simulasi Navigasi & Suara
-  // -----------------------------------------------------------
-  startSimulation() {
-    if (!this.currentPathCoords || this.currentPathCoords.length === 0) return;
-
-    if (this.isSimulating) {
-      clearInterval(this.simulationInterval);
-      this.isSimulating = false;
-      document.getElementById('btn-simulation').innerHTML = '🏃 Simulasi';
-      return;
-    }
-
-    this.isSimulating = true;
-    document.getElementById('btn-simulation').innerHTML = '⏸️ Stop';
-
-    let coordIdx = 0;
-    const totalCoords = this.currentPathCoords.length;
-
-    const walkerIcon = L.divIcon({
-      html: '<div class="walker-pin">🧭</div>',
-      className: 'custom-node-icon',
-      iconSize: [32, 32],
-      iconAnchor: [16, 16]
-    });
-
-    if (this.walkerMarker) this.walkerMarker.remove();
-    this.walkerMarker = L.marker(this.currentPathCoords[0], { icon: walkerIcon }).addTo(this.map);
-    this.map.panTo(this.currentPathCoords[0], { animate: true });
-
-    this.simulationInterval = setInterval(() => {
-      coordIdx++;
-      if (coordIdx >= totalCoords) {
-        clearInterval(this.simulationInterval);
-        this.isSimulating = false;
-        document.getElementById('btn-simulation').innerHTML = '🏃 Simulasi';
-        return;
-      }
-
-      const coord = this.currentPathCoords[coordIdx];
-      this.walkerMarker.setLatLng(coord);
-
-      if (this.currentDirections) {
-        const closestStepIdx = this.currentDirections.findIndex(step => {
-          return Math.abs(step.coords[0] - coord[0]) < 0.0001 && Math.abs(step.coords[1] - coord[1]) < 0.0001;
-        });
-        if (closestStepIdx !== -1) {
-          this.highlightStep(closestStepIdx);
-          if (this.isSpeaking) {
-            this.speakText(this.currentDirections[closestStepIdx].instruction.replace(/<[^>]*>?/gm, ''));
-          }
-        }
-      }
-    }, 600);
-  }
-
   toggleSpeechGuide() {
     const btn = document.getElementById('btn-audio-guide');
     if (!('speechSynthesis' in window)) {
@@ -1525,7 +1396,7 @@ class ZooSMateNavigationApp {
       window.speechSynthesis.cancel();
       this.isSpeaking = false;
       btn.classList.remove('speaking');
-      btn.innerHTML = '🔊 Suara';
+      btn.innerHTML = '🔊 Panduan Suara';
       return;
     }
 
@@ -1533,7 +1404,7 @@ class ZooSMateNavigationApp {
     btn.classList.add('speaking');
     btn.innerHTML = '⏹️ Hening';
 
-    let fullNarration = `Memulai navigasi jalan setapak Hutan UNESA. `;
+    let fullNarration = `Memulai panduan arah jalan setapak Hutan UNESA. `;
     this.currentDirections.forEach(step => {
       const clean = step.instruction.replace(/<[^>]*>?/gm, '');
       fullNarration += `${clean}. `;
@@ -1542,7 +1413,7 @@ class ZooSMateNavigationApp {
     this.speakText(fullNarration, () => {
       this.isSpeaking = false;
       btn.classList.remove('speaking');
-      btn.innerHTML = '🔊 Suara';
+      btn.innerHTML = '🔊 Panduan Suara';
     });
   }
 
@@ -1557,9 +1428,6 @@ class ZooSMateNavigationApp {
     window.speechSynthesis.speak(utterance);
   }
 
-  // -----------------------------------------------------------
-  // Modal Komparasi A* vs Dijkstra
-  // -----------------------------------------------------------
   showComparisonModal() {
     const resAStar = runAStar(this.startNodeId, this.endNodeId);
     const resDijkstra = runDijkstra(this.startNodeId, this.endNodeId);
