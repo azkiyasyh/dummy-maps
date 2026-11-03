@@ -64,13 +64,14 @@ function haversineDistance(p1, p2) {
   return Math.round(R * c);
 }
 
-function findNearestPathNode(lat, lon, maxDistance = 500) {
+function findNearestPathNode(lat, lon, maxDistance = Infinity) {
   let nearestId = null;
   let minDist = Infinity;
 
   for (const id in GRAPH_ADJ) {
-    if (GRAPH_ADJ[id].length === 0) continue;
+    if (!GRAPH_ADJ[id] || GRAPH_ADJ[id].length === 0) continue;
     const node = OSM_NODES[id];
+    if (!node) continue;
     const d = haversineDistance({ lat, lon }, node);
     if (d < minDist) {
       minDist = d;
@@ -78,8 +79,10 @@ function findNearestPathNode(lat, lon, maxDistance = 500) {
     }
   }
 
-  if (minDist <= maxDistance) {
-    return { id: nearestId, dist: minDist, node: OSM_NODES[nearestId] };
+  if (nearestId && minDist <= maxDistance) {
+    const firstEdge = GRAPH_ADJ[nearestId][0];
+    const wayName = firstEdge ? firstEdge.wayName : 'Jalur Terdekat';
+    return { id: nearestId, dist: minDist, node: OSM_NODES[nearestId], wayName };
   }
   return null;
 }
@@ -410,6 +413,11 @@ class ZooSMateNavigationApp {
     this.bindEvents();
     this.calculateAndRenderRoute();
 
+    // Default collapsed di mobile agar peta langsung terlihat jelas
+    if (window.innerWidth <= 640) {
+      document.getElementById('nav-panel').classList.add('collapsed');
+    }
+
     // 🚀 LANGSUNG MINTA IZIN AKSES LOKASI REALTIME SAAT WEB DIBUKA
     this.startGpsTracking();
   }
@@ -443,6 +451,12 @@ class ZooSMateNavigationApp {
     ALL_POIS.forEach(p => {
       POI_MAP[p.id] = p;
     });
+    POI_MAP["USER_LOCATION"] = {
+      id: "USER_LOCATION",
+      name: "Lokasi GPS Saya",
+      icon: "📍",
+      category: "GPS Realtime"
+    };
   }
 
   // -----------------------------------------------------------
@@ -478,6 +492,16 @@ class ZooSMateNavigationApp {
 
     startSelect.innerHTML = '';
     endSelect.innerHTML = '';
+
+    // Group 0: Opsi Khusus Posisi GPS Realtime Pengguna (Hanya untuk Titik Asal)
+    const grpUserStart = document.createElement('optgroup');
+    grpUserStart.label = "📍 Posisi Realtime Anda";
+    const optUser = document.createElement('option');
+    optUser.value = "USER_LOCATION";
+    optUser.textContent = "📍 Lokasi GPS Saya (Realtime)";
+    if (this.selectedStartPoi === "USER_LOCATION") optUser.selected = true;
+    grpUserStart.appendChild(optUser);
+    startSelect.appendChild(grpUserStart);
 
     // Group 1: Tempat Resmi Hutan UNESA
     const grpPresetStart = document.createElement('optgroup');
@@ -582,6 +606,7 @@ class ZooSMateNavigationApp {
       let customBadge = isCustom ? `<span style="background:#f59e0b;color:#000;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:bold;">TITIK KUSTOM</span>` : '';
       let actionsHtml = `
         <div class="popup-node-actions">
+          <button class="popup-btn btn-route-from-user" onclick="app.routeFromUserTo('${poi.id}')">🧭 Rute dari Saya ke Sini</button>
           <button class="popup-btn" onclick="app.setStartFromNode('${poi.nodeId}', '${poi.id}')">🚩 Titik Asal</button>
           <button class="popup-btn" onclick="app.setEndFromNode('${poi.nodeId}', '${poi.id}')">🏁 Titik Tujuan</button>
           ${isCustom ? `
@@ -668,6 +693,7 @@ class ZooSMateNavigationApp {
           <span style="font-weight: 600;">${poi.name}</span>
         </div>
         <div class="custom-poi-actions">
+          <button class="btn-item-action" title="Petunjuk dari Lokasi Saya ke Sini" onclick="app.routeFromUserTo('${poi.id}')">🧭</button>
           <button class="btn-item-action" title="Pusatkan di Peta" onclick="app.panToPoi('${poi.id}')">🔍</button>
           <button class="btn-item-action" title="Jadikan Titik Awal" onclick="app.setStartFromNode('${poi.nodeId}', '${poi.id}')">🚩</button>
           <button class="btn-item-action" title="Jadikan Titik Tujuan" onclick="app.setEndFromNode('${poi.nodeId}', '${poi.id}')">🏁</button>
@@ -907,12 +933,22 @@ class ZooSMateNavigationApp {
     // Saat pertama kali mendapatkan koordinat: jika berada di dalam kawasan UNESA, otomatis set sebagai awal
     if (!this.hasInitialGpsFix) {
       this.hasInitialGpsFix = true;
-      if (distToUnesa <= 1500) {
-        const snap = findNearestPathNode(lat, lon, 500);
+      if (distToUnesa <= 2000) {
+        const snap = findNearestPathNode(lat, lon, Infinity);
         if (snap) {
           this.startNodeId = snap.id;
+          this.selectedStartPoi = "USER_LOCATION";
+          const startSelect = document.getElementById('select-start');
+          if (startSelect) startSelect.value = "USER_LOCATION";
           this.calculateAndRenderRoute();
         }
+      }
+    } else if (this.isWaitingGpsForRoute || this.selectedStartPoi === "USER_LOCATION") {
+      this.isWaitingGpsForRoute = false;
+      const snap = findNearestPathNode(lat, lon, Infinity);
+      if (snap) {
+        this.startNodeId = snap.id;
+        this.calculateAndRenderRoute();
       }
     }
   }
@@ -969,25 +1005,58 @@ class ZooSMateNavigationApp {
   }
 
   setGpsAsStartPoint() {
+    this.selectedStartPoi = "USER_LOCATION";
+    const startSelect = document.getElementById('select-start');
+    if (startSelect) startSelect.value = "USER_LOCATION";
+
     if (!this.currentUserCoords) {
-      alert("Lokasi GPS Anda belum terdeteksi. Silakan aktifkan 'GPS Live' dan izinkan browser mengakses lokasi.");
+      this.isWaitingGpsForRoute = true;
       this.startGpsTracking();
+      alert("Sedang mendeteksi sinyal GPS Anda... Izinkan browser mengakses lokasi untuk membuat rute petunjuk arah dari posisi Anda.");
       return;
     }
 
-    const snap = findNearestPathNode(this.currentUserCoords.lat, this.currentUserCoords.lon, 600);
+    const snap = findNearestPathNode(this.currentUserCoords.lat, this.currentUserCoords.lon, Infinity);
     if (!snap) {
-      alert("Lokasi Anda saat ini berada di luar kawasan jalan setapak Hutan UNESA. Untuk navigasi di dalam hutan, titik awal akan dimulai dari Gerbang Utama UNESA.");
-      this.startNodeId = PRESET_POIS[0].nodeId;
-      this.selectedStartPoi = "POI_START";
-      document.getElementById('select-start').value = "POI_START";
-      this.calculateAndRenderRoute();
+      alert("Tidak dapat menemukan jaringan jalan setapak terdekat dari posisi Anda.");
       return;
     }
 
     this.startNodeId = snap.id;
     this.map.setView([this.currentUserCoords.lat, this.currentUserCoords.lon], 18, { animate: true });
     this.calculateAndRenderRoute();
+  }
+
+  routeFromUserTo(poiId) {
+    const poi = POI_MAP[poiId];
+    if (!poi) return;
+
+    this.selectedEndPoi = poiId;
+    this.endNodeId = poi.nodeId;
+    const endSelect = document.getElementById('select-end');
+    if (endSelect) endSelect.value = poiId;
+
+    this.map.closePopup();
+
+    const navPanel = document.getElementById('nav-panel');
+    if (navPanel && navPanel.classList.contains('collapsed')) {
+      navPanel.classList.remove('collapsed');
+    }
+
+    this.setGpsAsStartPoint();
+  }
+
+  routeFromUserToNode(nodeId) {
+    this.endNodeId = nodeId;
+    this.selectedEndPoi = "CUSTOM_NODE";
+    this.map.closePopup();
+
+    const navPanel = document.getElementById('nav-panel');
+    if (navPanel && navPanel.classList.contains('collapsed')) {
+      navPanel.classList.remove('collapsed');
+    }
+
+    this.setGpsAsStartPoint();
   }
 
   // -----------------------------------------------------------
@@ -1033,7 +1102,7 @@ class ZooSMateNavigationApp {
       toast.classList.remove('show');
     };
     document.getElementById('btn-prox-set-end').onclick = () => {
-      this.setEndFromNode(poi.nodeId, poi.id);
+      this.routeFromUserTo(poi.id);
       toast.classList.remove('show');
     };
 
@@ -1163,6 +1232,7 @@ class ZooSMateNavigationApp {
               ${snap ? `<br><span style="color:#10b981;">✓ Snap ke jalan setapak (${Math.round(snap.dist)}m)</span>` : ''}
             </div>
             <div class="popup-node-actions">
+              ${snap ? `<button class="popup-btn btn-route-from-user" onclick="app.routeFromUserToNode('${snap.id}')">🧭 Rute dari Saya ke Sini</button>` : ''}
               ${snap ? `<button class="popup-btn" onclick="app.setStartFromNode('${snap.id}')">🚩 Set Asal</button>` : ''}
               ${snap ? `<button class="popup-btn" onclick="app.setEndFromNode('${snap.id}')">🏁 Set Tujuan</button>` : ''}
               <button class="popup-btn btn-edit" onclick="app.openAddPoiModal({ lat: ${e.latlng.lat}, lng: ${e.latlng.lng} })">➕ Tandai Titik Baru</button>
@@ -1174,6 +1244,10 @@ class ZooSMateNavigationApp {
 
     document.getElementById('select-start').addEventListener('change', (e) => {
       this.selectedStartPoi = e.target.value;
+      if (this.selectedStartPoi === "USER_LOCATION") {
+        this.setGpsAsStartPoint();
+        return;
+      }
       const p = POI_MAP[this.selectedStartPoi];
       if (p) this.startNodeId = p.nodeId;
       this.calculateAndRenderRoute();
@@ -1187,6 +1261,10 @@ class ZooSMateNavigationApp {
     });
 
     document.getElementById('btn-swap').addEventListener('click', () => {
+      if (this.selectedStartPoi === "USER_LOCATION") {
+        alert("Titik asal 'Lokasi GPS Saya' tidak bisa ditukar sebagai titik tujuan. Silakan pilih titik tujuan langsung di daftar tujuan.");
+        return;
+      }
       const tempPoi = this.selectedStartPoi;
       this.selectedStartPoi = this.selectedEndPoi;
       this.selectedEndPoi = tempPoi;
@@ -1236,6 +1314,12 @@ class ZooSMateNavigationApp {
     document.getElementById('panel-close-btn').addEventListener('click', () => {
       navPanel.classList.add('collapsed');
     });
+    const dragBar = document.getElementById('panel-drag-bar');
+    if (dragBar) {
+      dragBar.addEventListener('click', () => {
+        navPanel.classList.toggle('collapsed');
+      });
+    }
 
     document.getElementById('toggle-edges').addEventListener('change', (e) => {
       this.showFootpaths = e.target.checked;
@@ -1303,6 +1387,25 @@ class ZooSMateNavigationApp {
     }
 
     const latlngs = result.path.map(id => [OSM_NODES[id].lat, OSM_NODES[id].lon]);
+
+    // Jika titik awal adalah lokasi GPS user, hubungkan langsung dari koordinat user ke awal jalan setapak
+    const isFromUserGps = (this.selectedStartPoi === "USER_LOCATION" && this.currentUserCoords);
+    if (isFromUserGps) {
+      const userPos = [this.currentUserCoords.lat, this.currentUserCoords.lon];
+      const startTrailPos = latlngs[0];
+
+      // Garis putus-putus biru petunjuk jalan keluar/masuk dari posisi pengguna
+      L.polyline([userPos, startTrailPos], {
+        color: '#3b82f6',
+        weight: 5,
+        dashArray: '6, 8',
+        opacity: 0.95,
+        lineCap: 'round'
+      }).addTo(this.activeRouteLayer);
+
+      latlngs.unshift(userPos);
+    }
+
     this.currentPathCoords = latlngs;
 
     L.polyline(latlngs, {
@@ -1328,16 +1431,48 @@ class ZooSMateNavigationApp {
   }
 
   renderSummaryAndDirections(result) {
-    const startName = POI_MAP[this.selectedStartPoi]?.name || "Titik Asal Pejalan Kaki";
+    const isFromUserGps = (this.selectedStartPoi === "USER_LOCATION" && this.currentUserCoords);
+    const startName = isFromUserGps ? "Lokasi GPS Anda" : (POI_MAP[this.selectedStartPoi]?.name || "Titik Asal Pejalan Kaki");
     const endName = POI_MAP[this.selectedEndPoi]?.name || "Titik Tujuan Hutan UNESA";
 
     const directions = generateDirections(result.path, startName, endName);
+
+    let userSnapDist = 0;
+    if (isFromUserGps) {
+      const firstNode = OSM_NODES[result.path[0]];
+      userSnapDist = haversineDistance(this.currentUserCoords, firstNode);
+      const snap = findNearestPathNode(this.currentUserCoords.lat, this.currentUserCoords.lon, Infinity);
+      const wayName = snap?.wayName || "Jalur Masuk Terdekat";
+
+      if (userSnapDist >= 3) {
+        directions.unshift({
+          stepNumber: 1,
+          type: "start",
+          icon: "🚶",
+          title: "Mulai dari Posisi Anda",
+          instruction: `Mulai dari lokasi Anda saat ini, berjalan sekitar <strong>${userSnapDist} meter</strong> menuju ke <strong>${wayName}</strong>.`,
+          nodeId: result.path[0],
+          coords: [this.currentUserCoords.lat, this.currentUserCoords.lon],
+          segmentDistance: userSnapDist,
+          cumulativeDistance: userSnapDist
+        });
+
+        // Sesuaikan nomor urut dan jarak kumulatif
+        directions.forEach((step, idx) => {
+          step.stepNumber = idx + 1;
+          if (idx > 0) {
+            step.cumulativeDistance += userSnapDist;
+          }
+        });
+      }
+    }
+
     this.currentDirections = directions;
 
-    const distMeter = result.totalDistance;
-    const estMinutes = Math.max(1, Math.round(distMeter / 75));
+    const totalDist = result.totalDistance + userSnapDist;
+    const estMinutes = Math.max(1, Math.round(totalDist / 75));
 
-    document.getElementById('metric-distance').textContent = `${distMeter} m`;
+    document.getElementById('metric-distance').textContent = `${totalDist} m`;
     document.getElementById('metric-time').textContent = `${estMinutes} mnt`;
     document.getElementById('metric-nodes').textContent = `${result.visitedNodesCount} node`;
     document.getElementById('metric-execution').textContent = `${result.executionTimeMs} ms`;

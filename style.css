@@ -56,6 +56,7 @@ html, body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -65,6 +66,12 @@ html, body {
   height: 100%;
   z-index: 1;
   background-color: #dcd7cb;
+}
+
+/* Posisi Kontrol Leaflet agar tidak tertutup header */
+.leaflet-top.leaflet-left {
+  top: 72px;
+  left: 14px;
 }
 
 /* -----------------------------------------
@@ -90,6 +97,18 @@ html, body {
 }
 
 .brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-text-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -171,6 +190,18 @@ html, body {
   align-items: center;
   gap: 10px;
   font-size: 12px;
+}
+
+.gps-card-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gps-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .gps-pulse-dot {
@@ -365,6 +396,28 @@ html, body {
   transform: translateX(calc(100% + 20px));
   opacity: 0;
   pointer-events: none;
+}
+
+.bottom-sheet-handle-bar {
+  display: none;
+  width: 100%;
+  padding: 8px 0 2px;
+  justify-content: center;
+  align-items: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.bottom-sheet-handle {
+  width: 44px;
+  height: 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.35);
+  transition: background 0.2s;
+}
+
+.bottom-sheet-handle-bar:hover .bottom-sheet-handle {
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .panel-header {
@@ -1353,6 +1406,19 @@ html, body {
   background: var(--green-primary);
 }
 
+.popup-btn.btn-route-from-user {
+  background: var(--green-primary);
+  color: #fff;
+  border-color: var(--green-light);
+  font-weight: 700;
+  flex-basis: 100%;
+  margin-bottom: 4px;
+  padding: 7px 10px;
+}
+.popup-btn.btn-route-from-user:hover {
+  background: var(--green-hover);
+}
+
 .popup-btn.btn-edit {
   background: rgba(245, 158, 11, 0.2);
   color: #fbbf24;
@@ -1368,9 +1434,84 @@ html, body {
 .popup-btn.btn-del:hover { background: #ef4444; color: #fff; }
 
 /* -----------------------------------------
-   Responsive Tweaks
+   Comprehensive Mobile & Tablet Responsive UI
    ----------------------------------------- */
 @media (max-width: 640px) {
+  /* Header Navigasi Compact */
+  .top-header {
+    top: max(8px, env(safe-area-inset-top, 8px));
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    width: auto;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .brand-badge {
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .brand-logo-paw {
+    font-size: 18px;
+  }
+
+  .brand-title {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .brand-tag {
+    display: none;
+  }
+
+  .header-actions {
+    gap: 5px;
+  }
+
+  .header-action-btn {
+    padding: 6px 8px;
+    font-size: 11.5px;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  /* Leaflet Controls di Mobile */
+  .leaflet-top.leaflet-left {
+    top: 60px;
+    left: 8px;
+  }
+
+  .leaflet-touch .leaflet-bar a {
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 17px;
+  }
+
+  .leaflet-popup-content-wrapper {
+    max-width: calc(100vw - 32px);
+    border-radius: 12px;
+  }
+
+  .popup-btn {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    font-size: 11.5px;
+  }
+
+  /* Bottom Sheet Drawer Navigasi */
+  .bottom-sheet-handle-bar {
+    display: flex;
+  }
+
   .nav-panel {
     top: auto;
     bottom: 0;
@@ -1378,27 +1519,271 @@ html, body {
     left: 0;
     width: 100vw;
     max-width: 100vw;
-    height: 62vh;
+    height: 70vh;
+    max-height: 85vh;
     border-radius: 20px 20px 0 0;
     border-bottom: none;
-  }
-  
-  .nav-panel.collapsed {
-    transform: translateY(calc(100% + 20px));
-  }
-  
-  .gps-floating-card {
-    bottom: calc(62vh + 10px);
-    left: 10px;
-    right: 10px;
-    max-width: calc(100vw - 20px);
+    border-left: none;
+    border-right: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.6);
   }
 
-  .nav-panel.collapsed ~ .gps-floating-card {
-    bottom: 20px;
+  .nav-panel.collapsed {
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .panel-header {
+    padding: 6px 16px 10px;
+  }
+
+  .panel-body {
+    padding: 12px 14px 24px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Sentuhan & Form Control Mobile */
+  .nav-select,
+  .form-select,
+  .form-input,
+  .form-textarea {
+    font-size: 16px !important; /* Cegah iOS auto-zoom */
+    min-height: 42px;
+  }
+
+  .select-wrapper .nav-select {
+    font-size: 13.5px !important;
+  }
+
+  .btn-use-gps {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .swap-row {
+    margin: -4px 0;
+  }
+
+  .btn-swap {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+  }
+
+  .algo-tab-btn {
+    padding: 8px 10px;
+    font-size: 12px;
+    min-height: 40px;
+  }
+
+  .action-buttons-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn-route-action,
+  .btn-compare-action {
+    width: 100%;
+    min-height: 44px;
+    font-size: 13px;
+    justify-content: center;
   }
 
   .summary-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .metric-card {
+    padding: 8px 10px;
+  }
+
+  .metric-val {
+    font-size: 16px;
+  }
+
+  /* GPS Floating Card Mobile */
+  .gps-floating-card {
+    position: absolute;
+    bottom: max(14px, env(safe-area-inset-bottom, 14px));
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+  }
+
+  .gps-card-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .gps-info-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .gps-coords-val {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .gps-status-sub {
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .gps-card-actions {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .gps-card-btn {
+    flex: 1;
+    min-height: 38px;
+    padding: 6px 4px;
+    font-size: 11px;
+    text-align: center;
+    justify-content: center;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Jika drawer navigasi terbuka, sembunyikan floating card agar peta terlihat lega */
+  .nav-panel:not(.collapsed) ~ .gps-floating-card {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(20px);
+  }
+
+  .nav-panel.collapsed ~ .gps-floating-card {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+    bottom: max(14px, env(safe-area-inset-bottom, 14px));
+  }
+
+  /* Proximity Toast Mobile */
+  .proximity-toast {
+    top: max(58px, calc(env(safe-area-inset-top, 0px) + 52px));
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .proximity-actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .proximity-action-btn {
+    width: 100%;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Modal Dialogs di Mobile - Slide Up Bottom Sheet Style */
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-card {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 88vh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .modal-header {
+    padding: 14px 16px;
+  }
+
+  .modal-body {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .form-row-coords {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .coords-helper-btns {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .btn-coord-helper {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .emoji-choice-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  .modal-footer {
+    padding: 12px 16px;
+  }
+
+  .btn-save, .btn-cancel {
+    min-height: 44px;
+    flex: 1;
+  }
+
+  /* Modal Compare Table */
+  .compare-table {
+    font-size: 11.5px;
+  }
+
+  .compare-table th, .compare-table td {
+    padding: 8px 6px;
+  }
+}
+
+/* Extra small devices (phones <= 380px) */
+@media (max-width: 380px) {
+  .header-btn-text {
+    display: none;
+  }
+
+  .header-action-btn {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+
+  .brand-title {
+    font-size: 13px;
+  }
+
+  .gps-card-btn {
+    font-size: 10px;
+    padding: 6px 2px;
   }
 }

@@ -21,39 +21,29 @@
     <header class="top-header">
       <div class="brand-badge">
         <span class="brand-logo-paw">🐾</span>
-        <div>
+        <div class="brand-text-group">
           <span class="brand-title">ZooSMate</span>
           <span class="brand-tag">Navigasi AI</span>
         </div>
       </div>
 
-      <!-- Tombol Live GPS Tracking -->
-      <button id="btn-toggle-gps" class="header-action-btn" title="Aktifkan/Matikan Pelacakan GPS Realtime">
-        <span id="gps-header-icon">🎯</span> <span id="gps-header-text">GPS Live</span>
-      </button>
+      <div class="header-actions">
+        <!-- Tombol Live GPS Tracking -->
+        <button id="btn-toggle-gps" class="header-action-btn" title="Aktifkan/Matikan Pelacakan GPS Realtime">
+          <span id="gps-header-icon">🎯</span> <span id="gps-header-text" class="header-btn-text">GPS Live</span>
+        </button>
 
-      <!-- Tombol Tambah Koordinat Baru -->
-      <button id="btn-open-add-poi" class="header-action-btn btn-add-poi" title="Tambah Titik Koordinat Baru">
-        <span>➕</span> <span>Tambah Titik</span>
-      </button>
+        <!-- Tombol Tambah Koordinat Baru -->
+        <button id="btn-open-add-poi" class="header-action-btn btn-add-poi" title="Tambah Titik Koordinat Baru">
+          <span>➕</span> <span class="header-btn-text">Tambah Titik</span>
+        </button>
 
-      <!-- Tombol Buka Panel Petunjuk Arah -->
-      <button id="btn-toggle-panel" class="header-action-btn" title="Buka/Tutup Panel Navigasi">
-        🧭 <span>Petunjuk Arah</span>
-      </button>
-    </header>
-
-    <!-- Floating Live GPS Status Card (Bawah Kiri) -->
-    <div id="gps-floating-card" class="gps-floating-card">
-      <div id="gps-pulse-dot" class="gps-pulse-dot"></div>
-      <div class="gps-info-text">
-        <span id="gps-coords-display" class="gps-coords-val">GPS: Menunggu sinyal...</span>
-        <span id="gps-status-sub" class="gps-status-sub">Klik 'GPS Live' untuk mulai mendeteksi</span>
+        <!-- Tombol Buka Panel Petunjuk Arah -->
+        <button id="btn-toggle-panel" class="header-action-btn btn-open-panel" title="Buka/Tutup Panel Navigasi">
+          <span>🧭</span> <span class="header-btn-text">Petunjuk Arah</span>
+        </button>
       </div>
-      <button id="btn-gps-recenter" class="gps-card-btn" title="Fokuskan Peta ke Posisi Saya">🎯 Ke Saya</button>
-      <button id="btn-center-unesa" class="gps-card-btn" title="Pusatkan Peta ke Hutan UNESA">🌲 Ke UNESA</button>
-      <button id="btn-gps-as-start" class="gps-card-btn" title="Gunakan Lokasi GPS Saya sebagai Titik Awal">🚩 Set Awal</button>
-    </div>
+    </header>
 
     <!-- Proximity Alert Toast (Deteksi Berada di Dekat Lokasi) -->
     <div id="proximity-toast" class="proximity-toast">
@@ -72,8 +62,13 @@
       </div>
     </div>
 
-    <!-- Panel Samping / Drawer Navigasi Petunjuk Arah -->
+    <!-- Panel Samping / Drawer Navigasi Petunjuk Arah (Bottom Sheet di Mobile) -->
     <aside id="nav-panel" class="nav-panel">
+      <!-- Drag Handle Indicator untuk Mobile Bottom Sheet -->
+      <div id="panel-drag-bar" class="bottom-sheet-handle-bar">
+        <div class="bottom-sheet-handle"></div>
+      </div>
+
       <!-- Header Panel -->
       <div class="panel-header">
         <div class="panel-header-title">
@@ -220,6 +215,22 @@
 
       </div>
     </aside>
+
+    <!-- Floating Live GPS Status Card (Bawah Layar) -->
+    <div id="gps-floating-card" class="gps-floating-card">
+      <div class="gps-card-main">
+        <div id="gps-pulse-dot" class="gps-pulse-dot"></div>
+        <div class="gps-info-text">
+          <span id="gps-coords-display" class="gps-coords-val">GPS: Menunggu sinyal...</span>
+          <span id="gps-status-sub" class="gps-status-sub">Klik 'GPS Live' untuk mulai mendeteksi</span>
+        </div>
+      </div>
+      <div class="gps-card-actions">
+        <button id="btn-gps-recenter" class="gps-card-btn" title="Fokuskan Peta ke Posisi Saya">🎯 Ke Saya</button>
+        <button id="btn-center-unesa" class="gps-card-btn" title="Pusatkan Peta ke Hutan UNESA">🌲 Ke UNESA</button>
+        <button id="btn-gps-as-start" class="gps-card-btn" title="Gunakan Lokasi GPS Saya sebagai Titik Awal">🚩 Set Awal</button>
+      </div>
+    </div>
 
     <!-- Modal Form Tambah / Edit Titik Koordinat Baru -->
     <div id="modal-poi-form" class="modal-overlay">
