@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ZooSMate - Navigasi Petunjuk Arah Cerdas & GPS Realtime</title>
+
+  <!-- 1. Leaflet CSS Core -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- 2. Kustom CSS Safari / Dark Forest UI Theme -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="app-layout">
+    <!-- Peta Interaktif Leaflet -->
+    <div id="map"></div>
+
+    <!-- Header Atas: Branding & Tombol Aksi Utama -->
+    <header class="top-header">
+      <div class="brand-badge">
+        <span class="brand-logo-paw">🐾</span>
+        <div>
+          <span class="brand-title">ZooSMate</span>
+          <span class="brand-tag">Navigasi AI</span>
+        </div>
+      </div>
+
+      <!-- Tombol Live GPS Tracking -->
+      <button id="btn-toggle-gps" class="header-action-btn" title="Aktifkan/Matikan Pelacakan GPS Realtime">
+        <span id="gps-header-icon">🎯</span> <span id="gps-header-text">GPS Live</span>
+      </button>
+
+      <!-- Tombol Tambah Koordinat Baru -->
+      <button id="btn-open-add-poi" class="header-action-btn btn-add-poi" title="Tambah Titik Koordinat Baru">
+        <span>➕</span> <span>Tambah Titik</span>
+      </button>
+
+      <!-- Tombol Buka Panel Petunjuk Arah -->
+      <button id="btn-toggle-panel" class="header-action-btn" title="Buka/Tutup Panel Navigasi">
+        🧭 <span>Petunjuk Arah</span>
+      </button>
+    </header>
+
+    <!-- Floating Live GPS Status Card (Bawah Kiri) -->
+    <div id="gps-floating-card" class="gps-floating-card">
+      <div id="gps-pulse-dot" class="gps-pulse-dot"></div>
+      <div class="gps-info-text">
+        <span id="gps-coords-display" class="gps-coords-val">GPS: Menunggu sinyal...</span>
+        <span id="gps-status-sub" class="gps-status-sub">Klik 'GPS Live' untuk mulai mendeteksi</span>
+      </div>
+      <button id="btn-gps-recenter" class="gps-card-btn" title="Fokuskan Peta ke Posisi Saya">🎯 Ke Saya</button>
+      <button id="btn-gps-as-start" class="gps-card-btn" title="Gunakan Lokasi GPS Saya sebagai Titik Awal">🚩 Set Awal</button>
+      <button id="btn-gps-mock" class="gps-card-btn" title="Simulasikan Berjalan di Hutan UNESA (Mode Uji Coba PC)">🧪 Simulasi GPS</button>
+    </div>
+
+    <!-- Proximity Alert Toast (Deteksi Berada di Dekat Lokasi) -->
+    <div id="proximity-toast" class="proximity-toast">
+      <div id="proximity-icon" class="proximity-icon-box">📍</div>
+      <div class="proximity-content">
+        <div class="proximity-header">
+          <span class="proximity-badge">🔔 Tempat Terdekat Terdeteksi!</span>
+          <button id="btn-close-proximity" class="proximity-close-btn">&times;</button>
+        </div>
+        <div id="proximity-title" class="proximity-title">Nama Tempat</div>
+        <div id="proximity-desc" class="proximity-desc">Deskripsi tempat</div>
+        <div class="proximity-actions">
+          <button id="btn-prox-set-start" class="proximity-action-btn">🚩 Mulai dari Sini</button>
+          <button id="btn-prox-set-end" class="proximity-action-btn">🏁 Menuju ke Sini</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel Samping / Drawer Navigasi Petunjuk Arah -->
+    <aside id="nav-panel" class="nav-panel">
+      <!-- Header Panel -->
+      <div class="panel-header">
+        <div class="panel-header-title">
+          <span>🧭</span> Petunjuk Arah Rute
+        </div>
+        <button id="panel-close-btn" class="panel-close-btn" title="Tutup Panel">&times;</button>
+      </div>
+
+      <!-- Isi Scrollable Panel -->
+      <div class="panel-body">
+        
+        <!-- Pilihan Titik Asal & Tujuan -->
+        <div class="nav-control-group">
+          <label class="control-label">
+            <span>🚩 Titik Asal (Start)</span>
+            <button id="btn-panel-use-my-loc" class="btn-use-gps" title="Gunakan koordinat GPS saat ini">📍 Lokasi Saya</button>
+          </label>
+          <div class="select-wrapper">
+            <span class="select-icon">📍</span>
+            <select id="select-start" class="nav-select"></select>
+          </div>
+        </div>
+
+        <div class="swap-row">
+          <button id="btn-swap" class="btn-swap" title="Tukar Titik Asal & Tujuan">⇅</button>
+        </div>
+
+        <div class="nav-control-group">
+          <label class="control-label">
+            <span>🏁 Titik Tujuan (Destination)</span>
+          </label>
+          <div class="select-wrapper">
+            <span class="select-icon">🎯</span>
+            <select id="select-end" class="nav-select"></select>
+          </div>
+        </div>
+
+        <!-- Pilihan Algoritma Pencarian -->
+        <div class="nav-control-group">
+          <label class="control-label">
+            <span>Pilih Algoritma AI</span>
+          </label>
+          <div class="algo-tabs">
+            <button id="tab-algo-astar" class="algo-tab-btn active">
+              <span>⭐ A* (A-Star)</span>
+              <span class="algo-tab-badge">EFEKTIF</span>
+            </button>
+            <button id="tab-algo-dijkstra" class="algo-tab-btn">
+              <span>🔷 Dijkstra</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tombol Aksi -->
+        <div class="action-buttons-row">
+          <button id="btn-find-route" class="btn-route-action">
+            <span>🔍</span> Cari Petunjuk Arah
+          </button>
+          <button id="btn-compare" class="btn-compare-action" title="Bandingkan efektivitas A* vs Dijkstra">
+            <span>⚡</span> Bandingkan
+          </button>
+        </div>
+
+        <!-- Radar Tempat Terdekat (Proximity Tracker) -->
+        <div class="nearby-section">
+          <div class="nearby-header">
+            <span>📡 Tempat Terdekat dari Posisi Anda</span>
+          </div>
+          <ul id="nearby-list" class="nearby-list">
+            <li style="font-size: 11.5px; color: var(--text-muted);">Aktifkan GPS untuk mendeteksi tempat terdekat...</li>
+          </ul>
+        </div>
+
+        <!-- Kartu Metrik Ringkasan Rute -->
+        <div class="route-summary-card">
+          <div class="summary-header">
+            <span class="summary-title">📊 Evaluasi Rute</span>
+            <span id="badge-algo-name" class="algo-indicator-tag">A*</span>
+          </div>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <div id="metric-distance" class="num green">0 m</div>
+              <div class="label">Total Jarak</div>
+            </div>
+            <div class="summary-item">
+              <div id="metric-time" class="num blue">0 mnt</div>
+              <div class="label">Est. Waktu</div>
+            </div>
+            <div class="summary-item">
+              <div id="metric-nodes" class="num amber">0 node</div>
+              <div class="label">Node Cek</div>
+            </div>
+            <div class="summary-item">
+              <div id="metric-execution" class="num">0 ms</div>
+              <div class="label">Komputasi</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Daftar Petunjuk Arah Langkah Demi Langkah -->
+        <div class="directions-section">
+          <div class="directions-header">
+            <span class="directions-title">
+              <span>📜</span> Langkah Navigasi
+            </span>
+            <div style="display: flex; gap: 4px;">
+              <button id="btn-audio-guide" class="directions-audio-btn" title="Dengarkan narasi suara petunjuk arah">
+                🔊 Suara
+              </button>
+              <button id="btn-simulation" class="directions-sim-btn" title="Simulasikan langkah pengunjung">
+                🏃 Simulasi
+              </button>
+            </div>
+          </div>
+
+          <ul id="steps-list" class="steps-list">
+            <!-- Langkah-langkah navigasi akan dimuat secara dinamis oleh navigation.js -->
+          </ul>
+        </div>
+
+        <!-- Kelola Titik Kustom Tersimpan -->
+        <div class="custom-poi-section">
+          <div class="custom-poi-header">
+            <span>⭐ Titik Kustom Anda</span>
+            <button id="btn-panel-add-poi" class="btn-small-add">➕ Tambah</button>
+          </div>
+          <ul id="custom-poi-list" class="custom-poi-list">
+            <!-- Dimuat dinamis -->
+          </ul>
+        </div>
+
+        <!-- Pengaturan Layer Tampilan Peta -->
+        <div class="layer-toggles-card">
+          <label class="toggle-row">
+            <span>🥾 Tampilkan Jalan Setapak (OSM Trails & Footpaths)</span>
+            <input type="checkbox" id="toggle-edges" checked>
+          </label>
+          <label class="toggle-row">
+            <span>🏷️ Tampilkan Label Nama Lokasi (Tooltips)</span>
+            <input type="checkbox" id="toggle-labels" checked>
+          </label>
+          <label class="toggle-row">
+            <span>🔔 Notifikasi Suara Saat Dekat Tempat</span>
+            <input type="checkbox" id="toggle-proximity-sound" checked>
+          </label>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- Modal Form Tambah / Edit Titik Koordinat Baru -->
+    <div id="modal-poi-form" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span id="modal-form-icon">📍</span> <span id="modal-form-title">Tambah Titik Koordinat Baru</span>
+          </div>
+          <button id="btn-close-form" class="panel-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="input-poi-id" value="">
+
+          <div class="form-group">
+            <label class="form-label">Nama Tempat / Landmark *</label>
+            <input type="text" id="input-poi-name" class="form-input" placeholder="Contoh: Kandang Rusa, Gazebo Foto, Pos 3..." required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Kategori Lokasi</label>
+            <select id="input-poi-category" class="form-select">
+              <option value="Titik Kustom">⭐ Titik Kustom</option>
+              <option value="Objek Wisata">🏞️ Objek Wisata</option>
+              <option value="Satwa & Fauna">🦌 Satwa & Fauna</option>
+              <option value="Spot Foto">📸 Spot Foto</option>
+              <option value="Fasilitas & Kuliner">☕ Fasilitas & Kuliner</option>
+              <option value="Shelter & Istirahat">🛖 Shelter & Istirahat</option>
+              <option value="Pos Jaga & Petugas">🛡️ Pos Jaga & Petugas</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Pilih Ikon Emoji</label>
+            <div class="emoji-picker-row">
+              <button type="button" class="emoji-choice-btn selected" data-emoji="📍">📍</button>
+              <button type="button" class="emoji-choice-btn" data-emoji="⭐">⭐</button>
+              <button type="button" class="emoji-choice-btn" data-emoji="📸">📸</button>
+              <button type="button" class="emoji-choice-btn" data-emoji="🦌">🦌</button>
+              <button type="button" class="emoji-choice-btn" data-emoji="🦜">🦜</button>
+              <button type="button" class="emoji-choice-btn" data-emoji="🌲">🌲</button>
+              <button type="button" class="emoji-choice-btn" data-emoji="🛖">🛖</button>
+              <button type="button" class="emoji-choice-btn" data-emoji="☕">☕</button>
+              <button type="button" class="emoji-choice-btn" data-emoji="🚻">🚻</button>
+              <button type="button" class="emoji-choice-btn" data-emoji="🎪">🎪</button>
+            </div>
+            <input type="hidden" id="input-poi-emoji" value="📍">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Titik Koordinat (Latitude & Longitude) *</label>
+            <div class="form-row-coords">
+              <input type="number" step="any" id="input-poi-lat" class="form-input" placeholder="Latitude (-7.xxxxx)" required>
+              <input type="number" step="any" id="input-poi-lng" class="form-input" placeholder="Longitude (112.xxxxx)" required>
+            </div>
+            <div class="coords-helper-btns">
+              <button type="button" id="btn-helper-use-gps" class="btn-coord-helper">📍 Ambil dari GPS Sekarang</button>
+              <button type="button" id="btn-helper-pick-map" class="btn-coord-helper">🗺️ Klik Titik di Peta</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Deskripsi / Catatan Tambahan</label>
+            <textarea id="input-poi-desc" class="form-textarea" rows="2" placeholder="Catatan tentang tempat ini (contoh: Tempat berkumpul regu, spot teduh)..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-cancel-form" class="btn-cancel">Batal</button>
+          <button type="button" id="btn-save-poi" class="btn-save">💾 Simpan Titik</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Komparasi Efektivitas A* vs Dijkstra -->
+    <div id="modal-compare" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span>⚡</span> Perbandingan Algoritma A* vs Dijkstra
+          </div>
+          <button id="modal-close-btn" class="panel-close-btn">&times;</button>
+        </div>
+        <div id="modal-compare-body" class="modal-body">
+          <!-- Isi tabel komparasi di-render dinamis -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS Core -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Data Jaringan Jalan Setapak Asli OpenStreetMap -->
+  <script src="walkable_data.js"></script>
+
+  <!-- Skrip Logika Navigasi, Graph, Dijkstra & A* -->
+  <script src="navigation.js"></script>
+</body>
+</html>
