@@ -893,6 +893,16 @@ class ZooSMateNavigationApp {
     document.getElementById('gps-pulse-dot').classList.remove('active');
     document.getElementById('gps-status-sub').textContent = "GPS dinonaktifkan (Klik 'GPS Live' untuk mengaktifkan)";
 
+    const panelCoordsVal = document.getElementById('panel-user-coords-val');
+    const panelAccVal = document.getElementById('panel-user-acc-val');
+    const panelGpsBadge = document.getElementById('panel-gps-badge-status');
+    if (panelCoordsVal) panelCoordsVal.textContent = "GPS Dinonaktifkan";
+    if (panelAccVal) panelAccVal.textContent = "Klik 'GPS Live' untuk memulai pelacakan";
+    if (panelGpsBadge) {
+      panelGpsBadge.textContent = "Nonaktif";
+      panelGpsBadge.className = "gps-status-badge";
+    }
+
     if (this.userGpsMarker) {
       this.userGpsMarker.remove();
       this.userGpsMarker = null;
@@ -914,13 +924,28 @@ class ZooSMateNavigationApp {
     const distToUnesa = haversineDistance({ lat, lon }, UNESA_CENTER);
 
     // Update Status Bar di Kiri Bawah
-    document.getElementById('gps-coords-display').textContent = `Lat: ${lat.toFixed(6)}, Lng: ${lon.toFixed(6)}`;
+    const coordsStr = `Lat: ${lat.toFixed(6)}, Lng: ${lon.toFixed(6)}`;
+    document.getElementById('gps-coords-display').textContent = coordsStr;
     
+    let subStatusText = "";
     if (distToUnesa <= 1500) {
-      document.getElementById('gps-status-sub').textContent = `Akurasi: ±${acc}m | Anda berada di area Kampus/Hutan UNESA`;
+      subStatusText = `Akurasi: ±${acc}m | Di area Kampus/Hutan UNESA`;
     } else {
       const distKm = (distToUnesa / 1000).toFixed(1);
-      document.getElementById('gps-status-sub').textContent = `Akurasi: ±${acc}m | Jarak Anda ke Hutan UNESA: ${distKm} km`;
+      subStatusText = `Akurasi: ±${acc}m | ${distKm} km dari Hutan UNESA`;
+    }
+    document.getElementById('gps-status-sub').textContent = subStatusText;
+
+    // Sinkronkan ke Widget Info Koordinat di Panel Navigasi
+    const panelCoordsVal = document.getElementById('panel-user-coords-val');
+    const panelAccVal = document.getElementById('panel-user-acc-val');
+    const panelGpsBadge = document.getElementById('panel-gps-badge-status');
+
+    if (panelCoordsVal) panelCoordsVal.textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    if (panelAccVal) panelAccVal.textContent = `Akurasi: ±${acc}m (${distToUnesa <= 1500 ? 'Area UNESA' : (distToUnesa / 1000).toFixed(1) + ' km dari UNESA'})`;
+    if (panelGpsBadge) {
+      panelGpsBadge.textContent = "Live GPS";
+      panelGpsBadge.className = "gps-status-badge active";
     }
 
     // Render Marker GPS Pengguna di lokasi riil
@@ -964,6 +989,16 @@ class ZooSMateNavigationApp {
       msg = "Waktu pencarian GPS habis (timeout).";
     }
     document.getElementById('gps-status-sub').textContent = msg;
+
+    const panelGpsBadge = document.getElementById('panel-gps-badge-status');
+    const panelAccVal = document.getElementById('panel-user-acc-val');
+    if (panelGpsBadge) {
+      panelGpsBadge.textContent = "Izin Ditolak / Lemah";
+      panelGpsBadge.className = "gps-status-badge error";
+    }
+    if (panelAccVal) {
+      panelAccVal.textContent = msg;
+    }
   }
 
   renderUserGpsMarker(lat, lon, accuracy) {
@@ -974,11 +1009,29 @@ class ZooSMateNavigationApp {
       iconAnchor: [11, 11]
     });
 
+    const popupHtml = `
+      <div class="popup-node-card">
+        <div class="popup-node-title">📍 Posisi Anda Saat Ini</div>
+        <div class="user-gps-coords-box">
+          <div class="user-gps-coords-line">Lat: ${lat.toFixed(6)}</div>
+          <div class="user-gps-coords-line">Lng: ${lon.toFixed(6)}</div>
+          <div class="user-gps-acc-line">Akurasi Perangkat: ±${accuracy} meter</div>
+        </div>
+        <div class="popup-node-actions">
+          <button class="popup-btn" onclick="app.copyUserCoordinates()">📋 Salin Koordinat</button>
+          <button class="popup-btn btn-route-from-user" onclick="app.setGpsAsStartPoint()">🚩 Set Titik Awal</button>
+        </div>
+      </div>
+    `;
+
     if (!this.userGpsMarker) {
       this.userGpsMarker = L.marker([lat, lon], { icon: userIcon, zIndexOffset: 1000 }).addTo(this.map);
-      this.userGpsMarker.bindPopup("<b>📍 Posisi Anda Saat Ini</b><br>Koordinat GPS Realtime perangkat.");
+      this.userGpsMarker.bindPopup(popupHtml, { className: 'user-gps-popup' });
     } else {
       this.userGpsMarker.setLatLng([lat, lon]);
+      if (this.userGpsMarker.getPopup()) {
+        this.userGpsMarker.setPopupContent(popupHtml);
+      }
     }
 
     if (!this.userAccuracyCircle) {
@@ -1147,6 +1200,52 @@ class ZooSMateNavigationApp {
     });
   }
 
+  copyUserCoordinates() {
+    if (!this.currentUserCoords) {
+      alert("Koordinat Anda belum tersedia. Pastikan GPS aktif dan izin lokasi telah disetujui di browser.");
+      return;
+    }
+    const text = `${this.currentUserCoords.lat.toFixed(6)}, ${this.currentUserCoords.lon.toFixed(6)}`;
+    this.copyToClipboard(text);
+  }
+
+  copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        this.showCopyToast(`📋 Koordinat disalin: ${text}`);
+      }).catch(() => {
+        this.fallbackCopyText(text);
+      });
+    } else {
+      this.fallbackCopyText(text);
+    }
+  }
+
+  fallbackCopyText(text) {
+    const input = document.createElement('textarea');
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    try {
+      document.execCommand('copy');
+      this.showCopyToast(`📋 Koordinat disalin: ${text}`);
+    } catch (e) {
+      prompt("Salin koordinat Anda secara manual:", text);
+    }
+    document.body.removeChild(input);
+  }
+
+  showCopyToast(message) {
+    const toast = document.getElementById('copy-toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(this._copyToastTimer);
+    this._copyToastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+    }, 2500);
+  }
+
   // -----------------------------------------------------------
   // Event Listeners & Binding
   // -----------------------------------------------------------
@@ -1169,6 +1268,20 @@ class ZooSMateNavigationApp {
     document.getElementById('btn-panel-use-my-loc').addEventListener('click', () => {
       this.setGpsAsStartPoint();
     });
+
+    const btnCopyGps = document.getElementById('btn-copy-gps');
+    if (btnCopyGps) {
+      btnCopyGps.addEventListener('click', () => {
+        this.copyUserCoordinates();
+      });
+    }
+
+    const btnCopyPanel = document.getElementById('btn-copy-coords-panel');
+    if (btnCopyPanel) {
+      btnCopyPanel.addEventListener('click', () => {
+        this.copyUserCoordinates();
+      });
+    }
 
     document.getElementById('btn-close-proximity').addEventListener('click', () => {
       document.getElementById('proximity-toast').classList.remove('show');
@@ -1629,5 +1742,6 @@ class ZooSMateNavigationApp {
 let app;
 window.addEventListener('DOMContentLoaded', () => {
   app = new ZooSMateNavigationApp();
+  window.app = app;
   app.init();
 });

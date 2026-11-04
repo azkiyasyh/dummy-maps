@@ -228,13 +228,45 @@ html, body {
 .gps-info-text {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+}
+
+.gps-coords-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .gps-coords-val {
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-weight: 700;
   color: var(--text-white);
   font-size: 11.5px;
+  letter-spacing: 0.2px;
+}
+
+.btn-copy-chip {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-copy-chip:hover,
+.btn-copy-chip:active {
+  background: rgba(16, 185, 129, 0.35);
+  border-color: #10b981;
+  color: #fff;
+  transform: translateY(-1px);
 }
 
 .gps-status-sub {
@@ -467,6 +499,109 @@ html, body {
 .panel-body::-webkit-scrollbar-thumb {
   background: var(--input-bg);
   border-radius: 4px;
+}
+
+/* -----------------------------------------
+   Widget Informasi Koordinat Saya di Panel
+   ----------------------------------------- */
+.user-coords-panel-card {
+  background: rgba(22, 19, 16, 0.65);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.coords-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.user-coords-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--amber-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gps-status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+.gps-status-badge.active {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.gps-status-badge.error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.coords-display-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.coords-mono-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-white);
+  letter-spacing: 0.3px;
+  word-break: break-all;
+}
+
+.coords-sub-info {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+/* -----------------------------------------
+   Copy Feedback Toast
+   ----------------------------------------- */
+.copy-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #10b981;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 9px 18px;
+  border-radius: 30px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), 0 0 12px rgba(16, 185, 129, 0.5);
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.copy-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* -----------------------------------------
@@ -1320,6 +1455,30 @@ html, body {
   100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
 }
 
+.user-gps-coords-box {
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-gps-coords-line {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #60a5fa;
+  letter-spacing: 0.3px;
+}
+
+.user-gps-acc-line {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .walker-pin {
   width: 32px;
   height: 32px;
@@ -1630,11 +1789,27 @@ html, body {
     min-width: 0;
   }
 
+  .gps-coords-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+  }
+
   .gps-coords-val {
     font-size: 11px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  .btn-copy-chip {
+    padding: 4px 8px;
+    font-size: 10.5px;
+    min-height: 26px;
+    border-radius: 6px;
   }
 
   .gps-status-sub {

@@ -80,6 +80,19 @@
       <!-- Isi Scrollable Panel -->
       <div class="panel-body">
         
+        <!-- Kartu Info Koordinat Saya (Khusus Mobile & Quick Info) -->
+        <div class="user-coords-panel-card" id="user-coords-panel-card">
+          <div class="coords-card-header">
+            <span class="user-coords-badge">📍 Koordinat Saya</span>
+            <span id="panel-gps-badge-status" class="gps-status-badge">Mencari GPS...</span>
+          </div>
+          <div class="coords-display-row">
+            <span id="panel-user-coords-val" class="coords-mono-text">Menunggu sinyal...</span>
+            <button type="button" id="btn-copy-coords-panel" class="btn-copy-chip" title="Salin Koordinat Saya">📋 Salin</button>
+          </div>
+          <div id="panel-user-acc-val" class="coords-sub-info">Akurasi: Belum tersedia</div>
+        </div>
+
         <!-- Pilihan Titik Asal & Tujuan -->
         <div class="nav-control-group">
           <label class="control-label">
@@ -221,7 +234,10 @@
       <div class="gps-card-main">
         <div id="gps-pulse-dot" class="gps-pulse-dot"></div>
         <div class="gps-info-text">
-          <span id="gps-coords-display" class="gps-coords-val">GPS: Menunggu sinyal...</span>
+          <div class="gps-coords-header">
+            <span id="gps-coords-display" class="gps-coords-val">GPS: Menunggu sinyal...</span>
+            <button type="button" id="btn-copy-gps" class="btn-copy-chip" title="Salin Koordinat Saya" aria-label="Salin Koordinat">📋 Salin</button>
+          </div>
           <span id="gps-status-sub" class="gps-status-sub">Klik 'GPS Live' untuk mulai mendeteksi</span>
         </div>
       </div>
@@ -231,6 +247,9 @@
         <button id="btn-gps-as-start" class="gps-card-btn" title="Gunakan Lokasi GPS Saya sebagai Titik Awal">🚩 Set Awal</button>
       </div>
     </div>
+
+    <!-- Toast Salin Koordinat Ringkas -->
+    <div id="copy-toast" class="copy-toast">📋 Koordinat disalin ke clipboard!</div>
 
     <!-- Modal Form Tambah / Edit Titik Koordinat Baru -->
     <div id="modal-poi-form" class="modal-overlay">
